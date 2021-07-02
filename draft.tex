@@ -1,0 +1,135 @@
+%
+%
+\input myindexing
+\input mydefs
+\input mymacros
+
+%
+
+\input twelvepoint
+\twelvepoint
+
+\ll{\bf Infra Optimization.}
+
+\ms
+
+Project 1
+
+\ll{DESCRIPTION}
+
+\ms
+
+Create a DevOps infrastructure for an e-commerce application to run on {\bf HA\/} (high availability) node.
+
+Note: HA is easily provided by K8s.
+
+\bs
+
+\ll{Background of the problem statement:}
+
+\ms
+
+A popular payment application, EasyPay where users add money to their wallet accounts, faces an issue in its payment success rate. The timeout that occurs with
+the connectivity of the database has been the reason for the issue.
+While troubleshooting, it is found that the database server has several downtime instances at irregular intervals. This situation compels the company to create their own infrastructure that runs in high-availability mode.
+Given that online shopping experiences continue to evolve as per customer expectations, the developers are driven to make their app more reliable, fast, and secure for improving the performance of the current system.
+
+\bs
+
+\ll{Solution}
+
+I will implement the application on AWS EKS.  EKS is Amazon's Elastic Kubernetes Service. 
+With one command line I can start a Kubernetes cluster with three default nodes. As part of spinning up the K8s cluster, Docker is automatically installed on the nodes.
+EKS can be configured to start a minimum of two nodes, and autoscale to more nodes based on cpu or memory utilization.
+
+EKS requires an AWS account, which I have previously setup.  Here is the command I use to start a cluster:
+
+
+
+
+Oned the Kubernetes cluster is up and running, I will provision one of the nodes to be a NFS server, and the other nodes to be NFS clients.  I will also use Ansible
+to provision the nodes with software.
+\ll{Implementation requirements:}
+
+\ms
+
+\myiteminit
+
+\myitem Create the cluster (EC2 instances with load balancer and elastic IP in case of AWS)
+
+Kubernetes provides the load balancer. An Elastic IP address is a static IPv4 address designed
+for dynamic cloud computing. An Elastic IP address is allocated to your AWS account, and is yours until you release it.
+Or maybe not.  
+
+\noindent (See https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/elastic-ip-addresses-eip.html)
+
+
+\ms
+\myitem Automate the provisioning of an EC2 instance using Ansible or Chef Puppet
+
+(I have scripts to do this.)
+\ms
+
+\myitem Install Docker and Kubernetes on the cluster
+(I have scripts to do this.)
+\ms
+
+\myitem Implement the network policies at the database pod to allow ingress traffic from the front-end application pod
+(Need to look this up in KIAMOL book.)
+\ms
+
+\myitem Create a new user with permissions to create, list, get, update, and delete pods
+(Doable.  Must research and demonstrate how to do this.)
+\ms
+
+\myitem Configure application on the pod
+(Maybe implement the database.)
+\ms
+
+\myitem Take snapshot of ETCD database
+(ETCD is the key-value store for K8s.  Need to read about ``backing up K8s.''
+\ms
+
+\myitem Set criteria such that if the memory of CPU goes beyond 50%, environments automatically get scaled up and configured
+(Did this as part of last class.  Need to re-implement this.)
+
+\bs
+
+\ll{The following tools must be used:}
+
+\ms
+
+\myiteminit
+
+\myitem EC2
+\myitem    Kubernetes
+\myitem    Docker
+\myitem     Ansible or Chef or Puppet
+
+\bs
+
+\ll{The following things to be kept in check:}
+
+\ms
+
+\myiteminit
+
+\myitem    You need to document the steps and write the algorithms in them.
+\myitem    The submission of your GitHub repository link is mandatory. In order to track your tasks, you need to share the link of the repository.
+\myitem Document the step-by-step process starting from creating test cases, then executing them, and recording the results.
+\myitem     You need to submit the final specification document, which includes:
+
+\mysubitem Project and tester details
+\mysubitem Concepts used in the project
+\mysubitem Links to the GitHub repository to verify the project completion
+\mysubitem Your conclusion on enhancing the application and defining the USPs (Unique Selling Points)
+
+
+Notes:
+
+See https://kubernetes.io/docs/tasks/run-application/run-single-instance-stateful-application/ for an example of runing
+MySQL in a pod.
+
+
+
+\bye
