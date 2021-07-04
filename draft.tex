@@ -1,8 +1,8 @@
 %
-%
 \input myindexing
 \input mydefs
 \input mymacros
+\input manmac
 
 %
 
@@ -15,7 +15,7 @@
 
 Project 1
 
-\ll{DESCRIPTION}
+\ll{\bf Description}
 
 \ms
 
@@ -29,26 +29,94 @@ Note: HA is easily provided by K8s.
 
 \ms
 
-A popular payment application, EasyPay where users add money to their wallet accounts, faces an issue in its payment success rate. The timeout that occurs with
-the connectivity of the database has been the reason for the issue.
-While troubleshooting, it is found that the database server has several downtime instances at irregular intervals. This situation compels the company to create their own infrastructure that runs in high-availability mode.
-Given that online shopping experiences continue to evolve as per customer expectations, the developers are driven to make their app more reliable, fast, and secure for improving the performance of the current system.
+A popular payment application, EasyPay where users add
+money to their wallet accounts, faces an issue in its
+payment success rate. The timeout that occurs with the
+connectivity of the database has been the reason for the issue.
+While troubleshooting, it is found that the database server
+has several downtime instances at irregular intervals. This
+situation compels the company to create their own infrastructure
+that runs in high-availability mode.  Given that online shopping
+experiences continue to evolve as per customer expectations,
+the developers are driven to make their app more reliable, fast,
+and secure for improving the performance of the current system.
+
 
 \bs
 
 \ll{Solution}
 
 I will implement the application on AWS EKS.  EKS is Amazon's Elastic Kubernetes Service. 
-With one command line I can start a Kubernetes cluster with three default nodes. As part of spinning up the K8s cluster, Docker is automatically installed on the nodes.
+With one command line I can start a Kubernetes cluster with three default nodes.
+As part of spinning up the K8s cluster, Docker is automatically installed on the nodes.
 EKS can be configured to start a minimum of two nodes, and autoscale to more nodes based on cpu or memory utilization.
 
-EKS requires an AWS account, which I have previously setup.  Here is the command I use to start a cluster:
+EKS requires an AWS account, which I have previously setup.  Here is the EKS command I use to start a cluster:
+
+\beginlines
+|eksctl create cluster \ |
+|    --name evansjr \  |
+|     --region us-west-2 \ |
+|     --nodes 3 \ |
+|     --nodes-max 5 \ |
+|     --with-oidc \ |
+|     --ssh-access \ |
+|     --managed |
+\endlines
+
+\noindent On average it takes Amazon about twenty minutes to setup the cluster.
+
+Once the Kubernetes cluster is up and running, I will provision the nodes with Ansible.
+This requires I be able to {\tt ssh\/} into the nodes and do some configuration outside of Kubernetes
+
+To find out the externally accessible IPs of the cluster I run
+
+{ \eightpoint
+\beginlines
+| $ kubectl get nodes -o wide |
+| NAME                                           STATUS   ROLES    AGE    VERSION              INTERNAL-IP      EXTERNAL-IP     OS-IMAGE         KERNEL-VERSION                CONTAINER-RUNTIME |
+| ip-192-168-1-152.us-west-2.compute.internal    Ready    <none>   2d2h   v1.19.6-eks-49a6c0   192.168.1.152    34.216.36.123   Amazon Linux 2   5.4.117-58.216.amzn2.x86_64   docker://19.3.13 |
+| ip-192-168-57-176.us-west-2.compute.internal   Ready    <none>   2d2h   v1.19.6-eks-49a6c0   192.168.57.176   35.80.10.134    Amazon Linux 2   5.4.117-58.216.amzn2.x86_64   docker://19.3.13 |
+| ip-192-168-95-52.us-west-2.compute.internal    Ready    <none>   2d2h   v1.19.6-eks-49a6c0   192.168.95.52    34.221.188.50   Amazon Linux 2   5.4.117-58.216.amzn2.x86_64   docker://19.3.13 |
+\endlines
+}
+
+Using the above information I create a {\tt hosts\/} file for Ansible to access the Kubernetes nodes:
+
+{\ninepoint
+\beginlines
+|$ cat hosts | 
+| [k8s-nodes] |
+| k8smaster01 ansible_host=34.216.36.123 ansible_user=ec2-user |
+| k8snode01 ansible_host=35.80.10.134    ansible_user=ec2-user |
+| k8snode02 ansible_host=34.221.188.50   ansible_user=ec2-user |
+| |
+| [all:vars] |
+| # Debian uses python3 instead of python2, |
+| # we need to set the interpreter for ansible |
+| ansible_python_interpreter=/usr/bin/python |
+| |
+| [kube-master] |
+| k8smaster01 |
+|  |
+| [kube-node] |
+| k8snode01 |
+| k8snode02 |
+\endlines
+}
+
+See appendix for more Ansible scripts setting up EKS Nodes.
+
+Now the problem described for this project is that the database service is unreliable. It is working inermittently, and business is being lost.
+The solution is to make the database reliable.  One way to do this is to create a service pointing to the database server running in a pod.
+If the database-server pod goes down the service will launch another one. But we want the database data to survive, or be persistent, so we need
+to make sure the database data is stored outside the pod, and is not lost when the database dies, crashes, or whaterver.
 
 
 
 
-Oned the Kubernetes cluster is up and running, I will provision one of the nodes to be a NFS server, and the other nodes to be NFS clients.  I will also use Ansible
-to provision the nodes with software.
+xxxxx
+
 \ll{Implementation requirements:}
 
 \ms
