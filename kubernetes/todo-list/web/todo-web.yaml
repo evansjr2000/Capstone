@@ -26,11 +26,11 @@ spec:
       containers:
         - name: web
           image: kiamol/ch04-todo-list
-	  resources:
-	    limits:
-	      cpu: 250m
-	    requests:
-	      cpu: 125m
+          resources:
+            limits:
+              cpu: 250m
+            requests:
+              cpu: 125m
           env:
           - name: ASPNETCORE_ENVIRONMENT
             value: Test
