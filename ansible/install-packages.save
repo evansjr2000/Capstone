@@ -1,0 +1,13 @@
+---
+
+- hosts: all
+  remote_user: centos
+  become: yes
+  become_method: sudo
+  tasks:
+   - name: Install all the packages
+     yum:
+       name: ['epel-release', 'emacs', 'telnet', 'xterm', 'pdsh', 'genders', 'libgenders', 'pdsh-mod-genders', 'pdsh-rcmd-ssh']
+       state: present
+       update_cache: True
+
