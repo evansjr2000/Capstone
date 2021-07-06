@@ -17,11 +17,6 @@ Project 1
 
 \ll{\bf Description}
 
-\ms
-
-Create a DevOps infrastructure for an e-commerce application to run on {\bf HA\/} (high availability) node.
-
-Note: HA is easily provided by K8s.
 
 \bs
 
@@ -46,12 +41,34 @@ and secure for improving the performance of the current system.
 
 \ll{Solution}
 
-I will implement the application on AWS EKS.  EKS is Amazon's Elastic Kubernetes Service. 
-With one command line I can start a Kubernetes cluster with three default nodes.
-As part of spinning up the K8s cluster, Docker is automatically installed on the nodes.
-EKS can be configured to start a minimum of two nodes, and autoscale to more nodes based on cpu or memory utilization.
+\ms
 
-EKS requires an AWS account, which I have previously setup.  Here is the EKS command I use to start a cluster:
+Create a DevOps infrastructure for an e-commerce application to run on {\bf HA\/} (high availability) node.
+
+
+\ll{High-Level Details}
+
+The application will run on Amazon's Elastic Kubernetes Service (EKS). EKS is a robust commercial
+solution that is reliable and easily scales.  Key to the service is the deployment of
+a database, running inside a Pod, that can easily be restarted for any reason.
+The data in the database must be persistent, i.e., not lost if the server goes down. So, in this solution the database pod uses
+a volume tied to the hardware of a particular node, using Peristent Volumes.
+Since we separate the backend hardware solution from the fron-end, the vendor who employs this solution can
+decide how much to invest in network, storage, and processing for the database server.
+
+\ll{Low-Level Details}
+
+\myitem Setting up access.
+
+In order to get this working, we need to install the AWS CLI, EKS, and Ansible on a Mac, PC, or Linux system.
+(In my particular case I setup a Debian VM running in VirtualBox on my Macbook Pro.) With these tools in
+place we are ready to launch the Kubernetes cluster on AWS.
+
+
+\myitem  Setting up the cluster.
+
+EKS requires an AWS account, which has been previously setup.  Next we launch the EKS cluster using
+the EKS CLI, eksctl, as follows:
 
 \beginlines
 |eksctl create cluster \ |
@@ -64,53 +81,156 @@ EKS requires an AWS account, which I have previously setup.  Here is the EKS com
 |     --managed |
 \endlines
 
-\noindent On average it takes Amazon about twenty minutes to setup the cluster.
+\noindent (On average it takes Amazon about twenty minutes to setup the cluster.)
 
-Once the Kubernetes cluster is up and running, I will provision the nodes with Ansible.
-This requires I be able to {\tt ssh\/} into the nodes and do some configuration outside of Kubernetes
+Once the Kubernetes cluster is up and running, the nodes are provisioned with Ansible.
+This requires that we be able to SSH into the nodes, which EKS allows using PKI certificates.
+All the ansible scripts are available at the github repository for this Project:
+{ \bf http://github.com/evansjr2000/Capstone.git}, and some examples are given in the
+appendix.
 
-To find out the externally accessible IPs of the cluster I run
 
-{ \eightpoint
+\ll {Setting up a Persistent Volume}
+
+The database will reside on a specific node of the cluster.  To prevent the database pod running on a node
+not containing the database we will label the node.
+
+
+
+
+{
 \beginlines
-| $ kubectl get nodes -o wide |
-| NAME                                           STATUS   ROLES    AGE    VERSION              INTERNAL-IP      EXTERNAL-IP     OS-IMAGE         KERNEL-VERSION                CONTAINER-RUNTIME |
-| ip-192-168-1-152.us-west-2.compute.internal    Ready    <none>   2d2h   v1.19.6-eks-49a6c0   192.168.1.152    34.216.36.123   Amazon Linux 2   5.4.117-58.216.amzn2.x86_64   docker://19.3.13 |
-| ip-192-168-57-176.us-west-2.compute.internal   Ready    <none>   2d2h   v1.19.6-eks-49a6c0   192.168.57.176   35.80.10.134    Amazon Linux 2   5.4.117-58.216.amzn2.x86_64   docker://19.3.13 |
-| ip-192-168-95-52.us-west-2.compute.internal    Ready    <none>   2d2h   v1.19.6-eks-49a6c0   192.168.95.52    34.221.188.50   Amazon Linux 2   5.4.117-58.216.amzn2.x86_64   docker://19.3.13 |
+| |
+| kubectl label node $(kubectl get nodes -o jsonpath='{.items[0].metadata.name}') kiamol=ch05 |
+| |
 \endlines
 }
 
-Using the above information I create a {\tt hosts\/} file for Ansible to access the Kubernetes nodes:
+\break
 
-{\ninepoint
+Here is the specification for the persistent volume, which will attach to the node with the correct label,
+as defined above.
+
+\ms
+
+
 \beginlines
-|$ cat hosts | 
-| [k8s-nodes] |
-| k8smaster01 ansible_host=34.216.36.123 ansible_user=ec2-user |
-| k8snode01 ansible_host=35.80.10.134    ansible_user=ec2-user |
-| k8snode02 ansible_host=34.221.188.50   ansible_user=ec2-user |
-| |
-| [all:vars] |
-| # Debian uses python3 instead of python2, |
-| # we need to set the interpreter for ansible |
-| ansible_python_interpreter=/usr/bin/python |
-| |
-| [kube-master] |
-| k8smaster01 |
-|  |
-| [kube-node] |
-| k8snode01 |
-| k8snode02 |
+|apiVersion: v1                        |
+|: PersistentVolume                    |
+|metadata:                             |
+|  name: pv01                          |
+|spec:                                 |
+|  capacity:                           |
+|    storage: 50Gi                     |
+|  accessModes:                        |
+|    - ReadWriteOnce                   |
+|  local:                              |
+|    path: /nfs_share_dir              |
+|  nodeAffinity:                       |
+|    required:                         |
+|      nodeSelectorTerms:              |
+|        - matchExpressions:           |
+|          - key: kiamol               |
+|            operator: In              |
+|            values:                   |
+|              - ch05                  |
 \endlines
-}
 
-See appendix for more Ansible scripts setting up EKS Nodes.
+\noindent And here is the manifest for the Persistent Volume Claim.
 
-Now the problem described for this project is that the database service is unreliable. It is working inermittently, and business is being lost.
-The solution is to make the database reliable.  One way to do this is to create a service pointing to the database server running in a pod.
-If the database-server pod goes down the service will launch another one. But we want the database data to survive, or be persistent, so we need
-to make sure the database data is stored outside the pod, and is not lost when the database dies, crashes, or whaterver.
+\ms
+
+\beginlines apiVersion: v1
+|kind: PersistentVolumeClaim  |
+|metadata:                    |
+|  name: postgres-pvc         |
+|spec:                        |
+|  accessModes:               |
+|    - ReadWriteOnce          |
+|  resources:                 |
+|    requests:                |
+|      storage: 40Mi          |
+|  storageClassName: ""       |
+\endlines
+
+\ms
+
+The access mode of {\bf ReadWriteOnce} limits access to this volume to one pod, in this case the database pod.
+As previously mentioned the database  pod will run on a specified node of the cluster.
+
+\noindent
+Here are the manifests for the database service and deployment;
+
+\beginlines
+|apiVersion: v1                              |
+|kind: Service                               |
+|metadata:                                   |
+|  name: todo-db                             |
+|spec:                                       |
+|  ports:                                    |
+|    - port: 5432                            |
+|      targetPort: 5432                      |
+|  selector:                                 |
+|    app: todo-db                            |
+|  type: ClusterIP                           |
+|---                                         |
+|apiVersion: apps/v1                        |
+|kind: Deployment                           |
+|metadata:                                  |
+|  name: todo-db                            |
+|spec:                                      |
+|  selector:                                |
+|    matchLabels:                           |
+|      app: todo-db                         |
+|  template:                                |
+|    metadata:                              |
+|      labels:                              |
+|        app: todo-db                       |
+|    spec:                                  |
+|      containers:                          |
+|        - name: db                         |
+|          image: postgres:11.6-alpine      |
+|          env:                             |
+|          - name: POSTGRES_PASSWORD_FILE   |
+|            value: /secrets/postgres_password |
+|          volumeMounts:                    |
+|            - name: secret                 |
+|              mountPath: "/secrets"        |
+|            - name: data                   |
+|              mountPath: /var/lib/postgresql/data |
+|      volumes:                             |
+|        - name: secret                     |
+|          secret:                          |
+|            secretName: todo-db-secret     |
+|            defaultMode: 0400              |
+|            items:                         |
+|            - key: POSTGRES_PASSWORD       |
+|              path: postgres_password      |
+|        - name: data                       |
+|          persistentVolumeClaim:           |
+|            claimName: postgres-pvc        |
+\endlines
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -199,5 +319,41 @@ See https://kubernetes.io/docs/tasks/run-application/run-single-instance-statefu
 MySQL in a pod.
 
 
+\ll{Appendix}
+
+
+{ \eightpoint
+\beginlines
+| $ kubectl get nodes -o wide |
+| NAME                                           STATUS   ROLES    AGE    VERSION              INTERNAL-IP      EXTERNAL-IP     OS-IMAGE         KERNEL-VERSION                CONTAINER-RUNTIME |
+| ip-192-168-1-152.us-west-2.compute.internal    Ready    <none>   2d2h   v1.19.6-eks-49a6c0   192.168.1.152    34.216.36.123   Amazon Linux 2   5.4.117-58.216.amzn2.x86_64   docker://19.3.13 |
+| ip-192-168-57-176.us-west-2.compute.internal   Ready    <none>   2d2h   v1.19.6-eks-49a6c0   192.168.57.176   35.80.10.134    Amazon Linux 2   5.4.117-58.216.amzn2.x86_64   docker://19.3.13 |
+| ip-192-168-95-52.us-west-2.compute.internal    Ready    <none>   2d2h   v1.19.6-eks-49a6c0   192.168.95.52    34.221.188.50   Amazon Linux 2   5.4.117-58.216.amzn2.x86_64   docker://19.3.13 |
+\endlines
+}
+
+Using the above information I create a {\tt hosts\/} file for Ansible to access the Kubernetes nodes:
+
+{\ninepoint
+\beginlines
+|$ cat hosts | 
+| [k8s-nodes] |
+| k8smaster01 ansible_host=34.216.36.123 ansible_user=ec2-user |
+| k8snode01 ansible_host=35.80.10.134    ansible_user=ec2-user |
+| k8snode02 ansible_host=34.221.188.50   ansible_user=ec2-user |
+| |
+| [all:vars] |
+| # Debian uses python3 instead of python2, |
+| # we need to set the interpreter for ansible |
+| ansible_python_interpreter=/usr/bin/python |
+| |
+| [kube-master] |
+| k8smaster01 |
+|  |
+| [kube-node] |
+| k8snode01 |
+| k8snode02 |
+\endlines
+}
 
 \bye
