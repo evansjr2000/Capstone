@@ -212,6 +212,66 @@ Here are the manifests for the database service and deployment;
 \endlines
 
 
+To access the database we use a web front-end.  This particular example uses a LoadBalancer manifest and we allow it to scale, using a Horizontal Pod Autoscaler (HPA) manifest as follows:
+
+\ms
+
+\beginlines
+|apiVersion: autoscaling/v1                 |
+|kind: HorizontalPodAutoscaler              |
+|metadata:                                  |
+|  name: todo-web                           |
+|  labels:                                  |
+|    kiamol: ch19                           |
+|spec:                                      |
+|  scaleTargetRef:                          |
+|    apiVersion: apps/v1                    |
+|    kind: Deployment                       |
+|    name: todo-web                         |
+|  minReplicas: 1                           |
+|  maxReplicas: 5                           |
+|  targetCPUUtilizationPercentage: 10       |
+\endlines
+
+\ms
+
+The target CPUUtilizationPercentage is set artifically low above in order to demonstrate autoscaling when the from end web server undergoes a large load.
+
+The following is the manifest for the web service:
+
+\ms
+
+\beginlines
+|apiVersion: v1         |
+|kind: Service          |
+|metadata:              |
+|  name: todo-web       |
+|spec:                  |
+|  ports:               |
+|    - port: 8081       |
+|      targetPort: 80   |
+|  selector:            |
+|    app: todo-web      |
+|  type: LoadBalancer   |
+\endlines
+
+The manifest for the deployment is very large and can be found in the appendix.
+
+
+\ll{Testing}
+
+\myiteminit
+
+\myitem To verify that the database robustly restarts after dying (or being deleted) and that
+the backend data is preserved (persistent) we show what is in the database before
+deleting the service, then as the service will automatically start another deployment
+of the database, we show that the data is still there.
+
+
+
+
+
+
 
 
 
@@ -313,11 +373,7 @@ Or maybe not.
 \mysubitem Your conclusion on enhancing the application and defining the USPs (Unique Selling Points)
 
 
-Notes:
-
-See https://kubernetes.io/docs/tasks/run-application/run-single-instance-stateful-application/ for an example of runing
-MySQL in a pod.
-
+\bigskip
 
 \ll{Appendix}
 
@@ -356,4 +412,60 @@ Using the above information I create a {\tt hosts\/} file for Ansible to access 
 \endlines
 }
 
+\ms
+
+Here is the manifest for the deployment of the web service:
+
+\ms
+
+\beginlines
+|apiVersion: apps/v1                           |
+|kind: Deployment                              |
+|metadata:                                     |
+|  name: todo-web                              |
+|spec:                                         |
+|  selector:                                   |
+|    matchLabels:                              |
+|      app: todo-web                           |
+|  template:                                   |
+|    metadata:                                 |
+|      labels:                                 |
+|        app: todo-web                         |
+|    spec:                                     |
+|      containers:                             |
+|        - name: web                           |
+|          image: kiamol/ch04-todo-list        |
+|          resources:                          |
+|            limits:                           |
+|              cpu: 250m                       |
+|            requests:                         |
+|              cpu: 125m                       |
+|          env:                                |
+|          - name: ASPNETCORE_ENVIRONMENT      |
+|            value: Test                       |
+|          volumeMounts:                       |
+|            - name: config                    |
+|              mountPath: "/app/config"        |
+|              readOnly: true                  |
+|            - name: secret                    |
+|              mountPath: "/app/secrets"       |
+|              readOnly: true                  |
+|      volumes:                                |
+|        - name: config                        |
+|          configMap:                          |
+|            name: todo-web-config             |
+|            items:                            |
+|            - key: config.json                |
+|              path: config.json               |
+|        - name: secret                        |
+|          secret:                             |
+|            secretName: todo-web-secret       |
+|            defaultMode: 0400                 |
+|            items:                            |
+|            - key: secrets.json               |
+|              path: secrets.json              |
+\endlines
+
 \bye
+
+
